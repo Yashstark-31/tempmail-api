@@ -4,7 +4,12 @@ export default async function handler(req, res) {
   // 🔥 CREATE MAIL
   if (type === "new") {
     try {
-      let r = await fetch("https://www.1secmail.com/api/v1/?action=genRandomMailbox&count=1");
+      let r = await fetch("https://www.1secmail.com/api/v1/?action=genRandomMailbox&count=1", {
+        headers: {
+          "User-Agent": "Mozilla/5.0"
+        }
+      });
+
       let d = await r.json();
 
       if (d && d[0]) {
@@ -19,9 +24,22 @@ export default async function handler(req, res) {
           token: login
         });
       }
-    } catch (e) {}
+    } catch (e) {
+      console.log("1secmail failed");
+    }
 
-    return res.json({ status: "error" });
+    // 🔥 FALLBACK (manual generate)
+    const random = Math.random().toString(36).substring(2, 10);
+    const domain = "1secmail.com";
+    const email = `${random}@${domain}`;
+
+    return res.status(200).json({
+      status: "ok",
+      email,
+      login: random,
+      domain,
+      token: random
+    });
   }
 
   // 📥 INBOX
@@ -32,12 +50,12 @@ export default async function handler(req, res) {
       let d = await r.json();
 
       return res.json({ status: "ok", messages: d });
-    } catch (e) {}
-
-    return res.json({ status: "error" });
+    } catch (e) {
+      return res.json({ status: "error" });
+    }
   }
 
-  // 📖 READ MAIL
+  // 📖 READ
   if (type === "read") {
     try {
       const url = `https://www.1secmail.com/api/v1/?action=readMessage&login=${login}&domain=${domain}&id=${id}`;
@@ -45,12 +63,12 @@ export default async function handler(req, res) {
       let d = await r.json();
 
       return res.json({ status: "ok", data: d });
-    } catch (e) {}
-
-    return res.json({ status: "error" });
+    } catch (e) {
+      return res.json({ status: "error" });
+    }
   }
 
-  // 🔐 OTP EXTRACT
+  // 🔐 OTP
   if (type === "otp") {
     try {
       const url = `https://www.1secmail.com/api/v1/?action=readMessage&login=${login}&domain=${domain}&id=${id}`;
@@ -62,12 +80,11 @@ export default async function handler(req, res) {
 
       return res.json({
         status: "ok",
-        otp: otp ? otp[0] : null,
-        full: body
+        otp: otp ? otp[0] : null
       });
-    } catch (e) {}
-
-    return res.json({ status: "error" });
+    } catch (e) {
+      return res.json({ status: "error" });
+    }
   }
 
   return res.json({ status: "invalid_type" });
