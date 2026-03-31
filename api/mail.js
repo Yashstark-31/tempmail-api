@@ -1,12 +1,16 @@
 export default async function handler(req, res) {
   const { type, token, id } = req.query;
 
-  // ================= NEW EMAIL =================
-  if (type === "new") {
-    try {
-      // get domain
+  try {
+
+    // ================= NEW =================
+    if (type === "new") {
       const dRes = await fetch("https://api.mail.tm/domains");
       const dData = await dRes.json();
+
+      if (!dData["hydra:member"]) {
+        return res.json({ status: "error", msg: "domain fail" });
+      }
 
       const domain = dData["hydra:member"][0].domain;
       const login = Math.random().toString(36).substring(2, 10);
@@ -30,45 +34,35 @@ export default async function handler(req, res) {
 
       const tData = await tRes.json();
 
+      if (!tData.token) {
+        return res.json({ status: "error", msg: "token fail", data: tData });
+      }
+
       return res.json({
         status: "ok",
         email: address,
         token: tData.token
       });
-
-    } catch (e) {
-      return res.json({ status: "error" });
     }
-  }
 
-  // ================= INBOX =================
-  if (type === "inbox") {
-    try {
+    // ================= INBOX =================
+    if (type === "inbox") {
       const r = await fetch("https://api.mail.tm/messages", {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+        headers: { Authorization: `Bearer ${token}` }
       });
 
       const d = await r.json();
 
       return res.json({
         status: "ok",
-        messages: d["hydra:member"]
+        messages: d["hydra:member"] || []
       });
-
-    } catch {
-      return res.json({ status: "error" });
     }
-  }
 
-  // ================= READ =================
-  if (type === "read") {
-    try {
+    // ================= READ =================
+    if (type === "read") {
       const r = await fetch(`https://api.mail.tm/messages/${id}`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+        headers: { Authorization: `Bearer ${token}` }
       });
 
       const d = await r.json();
@@ -77,19 +71,12 @@ export default async function handler(req, res) {
         status: "ok",
         data: d
       });
-
-    } catch {
-      return res.json({ status: "error" });
     }
-  }
 
-  // ================= OTP =================
-  if (type === "otp") {
-    try {
+    // ================= OTP =================
+    if (type === "otp") {
       const r = await fetch(`https://api.mail.tm/messages/${id}`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+        headers: { Authorization: `Bearer ${token}` }
       });
 
       const d = await r.json();
@@ -101,11 +88,14 @@ export default async function handler(req, res) {
         status: "ok",
         otp: otp ? otp[0] : null
       });
-
-    } catch {
-      return res.json({ status: "error" });
     }
-  }
 
-  return res.json({ status: "invalid_type" });
+    return res.json({ status: "invalid_type" });
+
+  } catch (e) {
+    return res.json({
+      status: "error",
+      msg: e.message
+    });
+  }
 }
