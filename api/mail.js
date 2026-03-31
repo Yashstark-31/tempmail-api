@@ -1,37 +1,62 @@
 export default async function handler(req, res) {
-  const { type, login, domain, id } = req.query;
+  const { type, token, id } = req.query;
 
-  const domains = [
-    "1secmail.com",
-    "1secmail.org",
-    "1secmail.net",
-    "wwjmp.com",
-    "esiix.com"
-  ];
-
-  // ================= NEW =================
+  // ================= NEW EMAIL =================
   if (type === "new") {
-    const random = Math.random().toString(36).substring(2, 10);
-    const domain = domains[Math.floor(Math.random() * domains.length)];
-    const email = `${random}@${domain}`;
+    try {
+      // get domain
+      const dRes = await fetch("https://api.mail.tm/domains");
+      const dData = await dRes.json();
 
-    return res.json({
-      status: "ok",
-      email,
-      login: random,
-      domain,
-      provider: "1secmail-network"
-    });
+      const domain = dData["hydra:member"][0].domain;
+      const login = Math.random().toString(36).substring(2, 10);
+      const password = "pass123456";
+
+      const address = `${login}@${domain}`;
+
+      // create account
+      await fetch("https://api.mail.tm/accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address, password })
+      });
+
+      // get token
+      const tRes = await fetch("https://api.mail.tm/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address, password })
+      });
+
+      const tData = await tRes.json();
+
+      return res.json({
+        status: "ok",
+        email: address,
+        token: tData.token
+      });
+
+    } catch (e) {
+      return res.json({ status: "error" });
+    }
   }
 
   // ================= INBOX =================
   if (type === "inbox") {
     try {
-      const url = `https://www.1secmail.com/api/v1/?action=getMessages&login=${login}&domain=${domain}`;
-      const r = await fetch(url);
+      const r = await fetch("https://api.mail.tm/messages", {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
       const d = await r.json();
 
-      return res.json({ status: "ok", messages: d });
+      return res.json({
+        status: "ok",
+        messages: d["hydra:member"]
+      });
+
     } catch {
       return res.json({ status: "error" });
     }
@@ -40,11 +65,19 @@ export default async function handler(req, res) {
   // ================= READ =================
   if (type === "read") {
     try {
-      const url = `https://www.1secmail.com/api/v1/?action=readMessage&login=${login}&domain=${domain}&id=${id}`;
-      const r = await fetch(url);
+      const r = await fetch(`https://api.mail.tm/messages/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
       const d = await r.json();
 
-      return res.json({ status: "ok", data: d });
+      return res.json({
+        status: "ok",
+        data: d
+      });
+
     } catch {
       return res.json({ status: "error" });
     }
@@ -53,21 +86,26 @@ export default async function handler(req, res) {
   // ================= OTP =================
   if (type === "otp") {
     try {
-      const url = `https://www.1secmail.com/api/v1/?action=readMessage&login=${login}&domain=${domain}&id=${id}`;
-      const r = await fetch(url);
+      const r = await fetch(`https://api.mail.tm/messages/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
       const d = await r.json();
 
-      let body = d.body || "";
-      let otp = body.match(/\b\d{4,8}\b/);
+      const text = (d.text || "") + (d.html || "");
+      const otp = text.match(/\b\d{4,8}\b/);
 
       return res.json({
         status: "ok",
         otp: otp ? otp[0] : null
       });
+
     } catch {
       return res.json({ status: "error" });
     }
   }
 
-  return res.json({ status: "invalid" });
+  return res.json({ status: "invalid_type" });
 }
